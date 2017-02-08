@@ -1,0 +1,8 @@
+*.pyc
+*.h5
+.#*
+*.swp
+*~
+/build/
+/caffe2keras.egg-info/
+/dist/
