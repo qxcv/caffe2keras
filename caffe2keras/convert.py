@@ -7,11 +7,11 @@ from keras.layers import (merge, ZeroPadding2D, Dropout, Convolution2D,
                           MaxPooling2D, AveragePooling2D, Input)
 from keras.models import Model
 
-from keras.caffe import caffe_pb2 as caffe
+from caffe2keras import caffe_pb2 as caffe
 import google.protobuf
-from keras.caffe.caffe_utils import (layer_type, normalize_layers,
+from caffe2keras.caffe_utils import (layer_type, normalize_layers,
                                      get_output_names, is_data_input)
-from keras.caffe.extra_layers import LRN2D, Select
+from caffe2keras.extra_layers import Select
 
 import numpy as np
 
@@ -109,7 +109,9 @@ def handle_conv(spec, bottom):
 
     if pad_h + pad_w > 0:
         bottom = ZeroPadding2D(
-            padding=(pad_h, pad_w), name=spec.name + '_zeropadding')(bottom)
+            padding=(pad_h, pad_w),
+            name=spec.name + '_zeropadding',
+            dim_ordering='th')(bottom)
 
     return Convolution2D(
         nb_filter,
@@ -117,7 +119,8 @@ def handle_conv(spec, bottom):
         nb_col,
         bias=has_bias,
         subsample=(stride_h, stride_w),
-        name=spec.name)(bottom)
+        name=spec.name,
+        dim_ordering='th')(bottom)
 
 
 @construct('dropout')
@@ -140,15 +143,6 @@ def handle_dense(spec, bottom):
         bottom = Flatten(name=name + '_flatten')(bottom)
 
     return Dense(output_dim, name=name)(bottom)
-
-
-@construct('lrn')
-def handle_lrn(spec, bottom):
-    alpha = spec.lrn_param.alpha
-    k = spec.lrn_param.k
-    beta = spec.lrn_param.beta
-    n = spec.lrn_param.local_size
-    return LRN2D(alpha=alpha, k=k, beta=beta, n=n, name=spec.name)(bottom)
 
 
 @construct('pooling')
@@ -178,7 +172,9 @@ def handle_pooling(spec, bottom):
     # this should be fixed properly at some point.
     if pad_h + pad_w > 0:
         bottom = ZeroPadding2D(
-            padding=(pad_h, pad_w), name=spec.name + '_zeropadding')(bottom)
+            padding=(pad_h, pad_w),
+            name=spec.name + '_zeropadding',
+            dim_ordering='th')(bottom)
     if spec.pooling_param.pool == 0:  # MAX pooling
         # border_mode = 'same'
         border_mode = 'valid'
@@ -188,14 +184,16 @@ def handle_pooling(spec, bottom):
             border_mode=border_mode,
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
-            name=spec.name)(bottom)
+            name=spec.name,
+            dim_ordering='th')(bottom)
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
             print("AVE pooling")
         return AveragePooling2D(
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
-            name=spec.name)(bottom)
+            name=spec.name,
+            dim_ordering='th')(bottom)
 
     # Stochastic pooling still needs to be implemented
     raise NotImplementedError(
@@ -293,7 +291,11 @@ def handle_batch_norm(spec, bottom):
         print(axis)
 
     return BatchNormalization(
-        epsilon=epsilon, momentum=decay, axis=axis, name=spec.name)(bottom)
+        epsilon=epsilon,
+        momentum=decay,
+        axis=axis,
+        name=spec.name,
+        dim_ordering='th')(bottom)
 
 
 @construct('input', num_bottoms=0, num_tops='+')

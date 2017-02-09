@@ -1,4 +1,4 @@
-from keras.caffe import caffe_pb2 as caffe
+from caffe2keras import caffe_pb2 as caffe
 
 layer_num_to_name = {
     0: 'NONE',
