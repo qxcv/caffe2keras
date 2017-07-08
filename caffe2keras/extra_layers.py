@@ -15,7 +15,7 @@ class Select(Layer):
         axes = pad_axes + [self.slice]
         return x[axes]
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         start, stop, stride = self.slice.indices(input_shape[self.axis])
         out_ax_size = (stop - start) // stride
         prefix = input_shape[:self.axis]

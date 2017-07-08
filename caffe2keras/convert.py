@@ -2,8 +2,8 @@ import six
 
 from functools import wraps
 
-from keras.layers import (merge, ZeroPadding2D, Dropout, Convolution2D,
-                          Flatten, Dense, BatchNormalization, Activation,
+from keras.layers import (merge, ZeroPadding2D, Dropout, Conv2D, Flatten,
+                          Dense, BatchNormalization, Activation,
                           MaxPooling2D, AveragePooling2D, Input)
 from keras.models import Model
 
@@ -111,16 +111,15 @@ def handle_conv(spec, bottom):
         bottom = ZeroPadding2D(
             padding=(pad_h, pad_w),
             name=spec.name + '_zeropadding',
-            dim_ordering='th')(bottom)
+            data_format='channels_first')(bottom)
 
-    return Convolution2D(
+    return Conv2D(
         nb_filter,
-        nb_row,
-        nb_col,
-        bias=has_bias,
-        subsample=(stride_h, stride_w),
+        kernel_size=(nb_col, nb_row),
+        strides=(stride_h, stride_w),
+        use_bias=has_bias,
         name=spec.name,
-        dim_ordering='th')(bottom)
+        data_format='channels_first')(bottom)
 
 
 @construct('dropout')
@@ -174,18 +173,18 @@ def handle_pooling(spec, bottom):
         bottom = ZeroPadding2D(
             padding=(pad_h, pad_w),
             name=spec.name + '_zeropadding',
-            dim_ordering='th')(bottom)
+            data_format='channels_first')(bottom)
     if spec.pooling_param.pool == 0:  # MAX pooling
         # border_mode = 'same'
         border_mode = 'valid'
         if debug:
             print("MAX pooling")
         return MaxPooling2D(
-            border_mode=border_mode,
+            padding=border_mode,
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
             name=spec.name,
-            dim_ordering='th')(bottom)
+            data_format='channels_first')(bottom)
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
             print("AVE pooling")
@@ -193,7 +192,7 @@ def handle_pooling(spec, bottom):
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
             name=spec.name,
-            dim_ordering='th')(bottom)
+            data_format='channels_first')(bottom)
 
     # Stochastic pooling still needs to be implemented
     raise NotImplementedError(
@@ -295,7 +294,7 @@ def handle_batch_norm(spec, bottom):
         momentum=decay,
         axis=axis,
         name=spec.name,
-        dim_ordering='th')(bottom)
+        data_format='channels_first')(bottom)
 
 
 @construct('input', num_bottoms=0, num_tops='+')
@@ -476,7 +475,7 @@ def create_model(config, phase, input_dim):
     assert len(model_inputs) >= 1, "No inputs detected"
     assert len(model_outputs) >= 1, "No outputs detected"
 
-    model = Model(input=model_inputs, output=model_outputs)
+    model = Model(inputs=model_inputs, outputs=model_outputs)
 
     return model
 
