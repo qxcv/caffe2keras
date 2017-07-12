@@ -9,6 +9,7 @@ from keras.models import Model
 
 from caffe2keras import caffe_pb2 as caffe
 import google.protobuf
+import google.protobuf.text_format
 from caffe2keras.caffe_utils import (layer_type, normalize_layers,
                                      get_output_names, is_data_input)
 from caffe2keras.extra_layers import Select
@@ -578,13 +579,13 @@ def convert_weights(param_layers, v='V1'):
             else:
                 raise RuntimeError('incorrect caffemodel version "' + v + '"')
 
-            # NOTE: on model parallel networks
-            # if group is > 1, that means the conv filters are split up
-            # into a number of 'groups' and each group lies on a seperate GPU.
-            # Each group only acts on the select group of outputs from pervious layer
-            # that was in the same GPU (not the entire stack)
-            # Here, we add zeros to simulate the same effect
-            # This was famously used in AlexNet and few other models from 2012-14
+            # NOTE: on model parallel networks, if group is > 1, that means the
+            # conv filters are split up into a number of 'groups' and each
+            # group lies on a seperate GPU. Each group only acts on the select
+            # group of outputs from previous layer that was in the same GPU
+            # (not the entire stack). Here, we add zeros to simulate the same
+            # effect. This was famously used in AlexNet and few other models
+            # from 2012-14.
 
             group = layer.convolution_param.group
             stack_size = temp_stack_size * group
@@ -611,15 +612,22 @@ def convert_weights(param_layers, v='V1'):
                 print(group)
 
             for i in range(group):
-                group_weights = weights_p[i * nb_filter_per_group:(
-                    i + 1) * nb_filter_per_group, i * stacks_size_per_group:(
-                        i + 1) * stacks_size_per_group, :, :]
-                group_weights[:] = np.array(blobs[0].data[i * group_data_size:(
-                    i + 1) * group_data_size]).reshape(group_weights.shape)
+                group_weights = weights_p[
+                    i*nb_filter_per_group:(i+1)*nb_filter_per_group,
+                    i*stacks_size_per_group:(i+1)*stacks_size_per_group,
+                    :, :]
+                blob_d = blobs[0].data
+                blob_gw = blob_d[i*group_data_size:(i+1)*group_data_size]
+                group_weights[:] \
+                    = np.array(blob_gw).reshape(group_weights.shape)
 
             # caffe, unlike theano, does correlation not convolution. We need
             # to flip the weights 180 deg
             weights_p = rot90(weights_p)
+
+            # Keras needs h*w*i*o filters (where d is input, o is output), so
+            # we transpose
+            weights_p = weights_p.transpose((3, 2, 1, 0))
 
             if weights_b is not None:
                 layer_weights = [
@@ -641,5 +649,12 @@ def load_weights(model, weights):
         if layer.name in weights:
             print('Copying weights for %s' % layer.name)
             model.get_layer(layer.name).set_weights(weights[layer.name])
+        elif not layer.trainable_weights:
+            # this is fine; we don't expect weights
+            print('No weights for untrainable layer %s' % layer.name)
         else:
-            print('No weights for %s' % layer.name)
+            # this isn't fine; if there are trainable weights, they should
+            # probably be in the param file
+            print('(!!) No weights for trainable layer %s, but it should have '
+                  'weights (?!). Does the parameter file match the .prototxt?'
+                  % layer.name)

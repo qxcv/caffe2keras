@@ -4,9 +4,12 @@
 Caffe](https://github.com/MarcBS/keras). See acks for code provenance.
 
 This is intended to serve as a conversion module for Caffe models to Keras
-models.
+models. It only works
+with [Ye Olde Caffe Classic™](https://github.com/BVLC/caffe) (which isn't really
+a thing, but which probably should be a thing to prevent confusion with
+the [Caffe 2](https://caffe2.ai/)).
 
-Please, be aware that this module is not regularly maintained. Thus, some layers
+Please be aware that this module is not regularly maintained. Thus, some layers
 or parameter definitions introduced in newer versions of either Keras or Caffe
 might not be compatible with the converter. Pull requests welcome!
 
