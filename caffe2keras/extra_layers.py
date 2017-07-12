@@ -19,8 +19,8 @@ class Select(Layer):
         start, stop, stride = self.slice.indices(input_shape[self.axis])
         out_ax_size = (stop - start) // stride
         prefix = input_shape[:self.axis]
-        suffix = input_shape[self.axis+1:]
-        return prefix + (out_ax_size,) + suffix
+        suffix = input_shape[self.axis + 1:]
+        return prefix + (out_ax_size, ) + suffix
 
     def get_config(self):
         return {

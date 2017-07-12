@@ -16,8 +16,7 @@ setup(
     author_email='sam@qxcv.net',
     license='MIT',
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
+        'Development Status :: 3 - Alpha', 'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
@@ -33,5 +32,4 @@ setup(
         'console_scripts': [
             'caffe2keras=caffe2keras.__main__:main',
         ]
-    }
-)
+    })

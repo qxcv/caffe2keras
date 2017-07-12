@@ -3,8 +3,8 @@ import six
 from functools import wraps
 
 from keras.layers import (merge, ZeroPadding2D, Dropout, Conv2D, Flatten,
-                          Dense, BatchNormalization, Activation,
-                          MaxPooling2D, AveragePooling2D, Input)
+                          Dense, BatchNormalization, Activation, MaxPooling2D,
+                          AveragePooling2D, Input)
 from keras.models import Model
 
 from caffe2keras import caffe_pb2 as caffe

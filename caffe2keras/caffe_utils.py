@@ -65,16 +65,19 @@ def extra_input_layer(config):
                 in_shape = caffe.BlobShape(dim=config.input_dim)
             else:
                 raise ValueError("if input: occurs at top-level of network "
-                                "spec, it must be matched by input_shape or "
-                                "input_dim")
+                                 "spec, it must be matched by input_shape or "
+                                 "input_dim")
 
             top_names.append(in_name)
             top_shapes.append(in_shape)
 
         input_param = caffe.InputParameter(shape=top_shapes)
 
-        return caffe.LayerParameter(name='dummy_input', top=top_names,
-                                    type='Input', input_param=input_param)
+        return caffe.LayerParameter(
+            name='dummy_input',
+            top=top_names,
+            type='Input',
+            input_param=input_param)
 
     return None
 
@@ -97,10 +100,16 @@ def normalize_layers(config, phase):
     rv = []
     for layer in layers:
         # skip things that may not be included in this phase
-        include_phases = {i.phase for i in layer.include if i.phase is not None}
+        include_phases = {
+            i.phase
+            for i in layer.include if i.phase is not None
+        }
         if len(include_phases) > 0 and phase not in include_phases:
             continue
-        exclude_phases = {i.phase for i in layer.exclude if i.phase is not None}
+        exclude_phases = {
+            i.phase
+            for i in layer.exclude if i.phase is not None
+        }
         if phase in exclude_phases:
             continue
 
