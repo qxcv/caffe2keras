@@ -117,6 +117,11 @@ def handle_conv(spec, bottom):
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
 
+    # XXX: I remember this sometimes had an off-by-one error on the output
+    # shape. After going through the output computation formulae for both Caffe
+    # & Keras, I can't see where the problem would lie (see NOTES.md). However,
+    # if there's an off-by-one error in output size, then it's probable that
+    # this code (and possibly my analysis) is incorrect.
     return Conv2D(
         nb_filter,
         kernel_size=(nb_col, nb_row),
