@@ -2,9 +2,10 @@ import six
 
 from functools import wraps
 
-from keras.layers import (merge, ZeroPadding2D, Dropout, Conv2D, Flatten,
-                          Dense, BatchNormalization, Activation, MaxPooling2D,
-                          AveragePooling2D, Input)
+from keras.layers import (ZeroPadding2D, Dropout, Conv2D, Flatten, Dense,
+                          BatchNormalization, Activation, MaxPooling2D,
+                          AveragePooling2D, Input, Multiply, Add, Maximum,
+                          Concatenate)
 from keras.models import Model
 
 from caffe2keras import caffe_pb2 as caffe
@@ -71,7 +72,8 @@ def construct(type_name, num_bottoms=1, num_tops=1):
         else:
             type_names = type_name
         for tn in type_names:
-            assert tn not in _converters, "double-registered handler for %s" % tn
+            assert tn not in _converters, \
+                "double-registered handler for %s" % tn
             _converters[tn] = wrapper
 
         return wrapper
@@ -82,7 +84,7 @@ def construct(type_name, num_bottoms=1, num_tops=1):
 @construct('concat', num_bottoms='+')
 def handle_concat(spec, bottoms):
     axis = spec.concat_param.axis
-    return merge(bottoms, mode='concat', concat_axis=axis, name=spec.name)
+    return Concatenate(axis=axis, name=spec.name)(bottoms)
 
 
 @construct('convolution')
@@ -99,6 +101,7 @@ def handle_conv(spec, bottom):
                 [spec.convolution_param.stride_w])[0] or 1
     pad_h = (spec.convolution_param.pad or [spec.convolution_param.pad_h])[0]
     pad_w = (spec.convolution_param.pad or [spec.convolution_param.pad_w])[0]
+    dilation = spec.convolution_param.dilation or (1, 1)
 
     if debug:
         print("kernel")
@@ -120,6 +123,7 @@ def handle_conv(spec, bottom):
         strides=(stride_h, stride_w),
         use_bias=has_bias,
         name=spec.name,
+        dilation_rate=dilation,
         data_format='channels_first')(bottom)
 
 
@@ -222,18 +226,18 @@ def handle_tanh(spec, bottom):
 
 @construct('eltwise', num_bottoms='+')
 def handle_eltwise(spec, bottoms):
-    axis = spec.scale_param.axis
+    # axis = spec.scale_param.axis
     op = spec.eltwise_param.operation  # PROD=0, SUM=1, MAX=2
     if op == 0:
-        merge_mode = 'mul'
+        Merger = Multiply
     elif op == 1:
-        merge_mode = 'sum'
+        Merger = Add
     elif op == 2:
-        merge_mode = 'max'
+        Merger = Maximum
     else:
         raise NotImplementedError(
             'Operation with id=%d of eltwise layer is not implemented' % op)
-    return merge(bottoms, mode=merge_mode, concat_axis=axis, name=spec.name)
+    return Merger(name=spec.name)(bottoms)
 
 
 def _make_slicer(slices):
