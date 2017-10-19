@@ -190,8 +190,8 @@ def handle_pooling(spec, bottom):
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
     if spec.pooling_param.pool == 0:  # MAX pooling
-        # border_mode = 'same'
-        border_mode = 'valid'
+        border_mode = 'same'
+        # border_mode = 'valid'
         if debug:
             print("MAX pooling")
         return MaxPooling2D(
