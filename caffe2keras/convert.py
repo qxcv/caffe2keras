@@ -161,9 +161,16 @@ def handle_dense(spec, bottom):
 
 @construct('pooling')
 def handle_pooling(spec, bottom):
-    #import pdb
 
-    shape = map(int, bottom.shape)
+    def int_or_none(x):
+        try:
+            return int(x)
+        except:
+            return None
+
+    # Dimention(None) is not convertable to int
+    shape = map(int_or_none, bottom.shape)
+
     kernel_h = spec.pooling_param.kernel_size or spec.pooling_param.kernel_h
     kernel_w = spec.pooling_param.kernel_size or spec.pooling_param.kernel_w
 
@@ -334,7 +341,9 @@ def handle_input(spec, bottoms):
     if len(all_shapes) == len(spec.top):
         # 1:1 mapping between shapes and tops
         for shape, top_name in zip(all_shapes, spec.top):
-            new_in = Input(batch_shape=shape.dim, name=top_name)
+            # Keras will auto-configure dim0 as batchsize None. Ignore Caffe
+            # batch size.
+            new_in = Input(shape=shape.dim[1:], name=top_name)
             rv.append(new_in)
     elif len(all_shapes) == 1:
         # copy same input (with same shape) to all tops
