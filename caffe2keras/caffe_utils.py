@@ -71,7 +71,7 @@ def extra_input_layer(config):
             top_names.append(in_name)
             top_shapes.append(in_shape)
 
-        input_param = caffe.InputParameter(shape=top_shapes)
+        input_param = caffe.InputParameter(shape=top_shapes[0])
 
         return caffe.LayerParameter(
             name='dummy_input',

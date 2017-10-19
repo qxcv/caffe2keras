@@ -87,6 +87,11 @@ def handle_concat(spec, bottoms):
     return Concatenate(axis=axis, name=spec.name)(bottoms)
 
 
+@construct('scale')
+def handle_scale(spec, bottom):
+    return Activation('linear')(bottom)
+
+
 @construct('convolution')
 def handle_conv(spec, bottom):
     has_bias = spec.convolution_param.bias_term
@@ -113,7 +118,7 @@ def handle_conv(spec, bottom):
 
     if pad_h + pad_w > 0:
         bottom = ZeroPadding2D(
-            padding=(pad_h, pad_w),
+            padding=(int(pad_h), int(pad_w)),
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
 
@@ -303,8 +308,7 @@ def handle_batch_norm(spec, bottom):
         epsilon=epsilon,
         momentum=decay,
         axis=axis,
-        name=spec.name,
-        data_format='channels_first')(bottom)
+        name=spec.name)(bottom)
 
 
 @construct('input', num_bottoms=0, num_tops='+')
