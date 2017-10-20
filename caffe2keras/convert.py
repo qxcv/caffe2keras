@@ -517,13 +517,6 @@ def create_model(config, phase, input_dim):
     return model
 
 
-def rot90(W):
-    for i in range(W.shape[0]):
-        for j in range(W.shape[1]):
-            W[i, j] = np.rot90(W[i, j], 2)
-    return W
-
-
 def convert_weights(param_layers, v='V1'):
     weights = {}
 
@@ -663,7 +656,7 @@ def convert_weights(param_layers, v='V1'):
 
             # Keras needs h*w*i*o filters (where d is input, o is output), so
             # we transpose
-            weights_p = weights_p.transpose((3, 2, 1, 0))
+            weights_p = weights_p.transpose((2, 3, 1, 0))
 
             if weights_b is not None:
                 layer_weights = [
