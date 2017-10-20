@@ -181,13 +181,15 @@ def handle_pooling(spec, bottom):
     pad_h = spec.pooling_param.pad or spec.pooling_param.pad_h
     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
 
-    caffe_compute_height = np.ceil((float(shape[2]) + 2 * pad_h - kernel_h) / stride_h + 1)
-    caffe_compute_width = np.ceil((float(shape[3]) + 2 * pad_w - kernel_w) / stride_w + 1)
+    caffe_compute_height = np.ceil(
+        (float(shape[2]) + 2 * pad_h - kernel_h) / stride_h + 1)
+    caffe_compute_width = np.ceil(
+        (float(shape[3]) + 2 * pad_w - kernel_w) / stride_w + 1)
 
     compute_height = (shape[2] + 2 * pad_h - kernel_h) / stride_h + 1
     compute_width = (shape[3] + 2 * pad_w - kernel_w) / stride_w + 1
 
-    pad_h = int(caffe_compute_height-compute_height + pad_h)
+    pad_h = int(caffe_compute_height - compute_height + pad_h)
     pad_w = int(caffe_compute_width - compute_width + pad_w)
     if debug:
         print("kernel")
@@ -218,7 +220,6 @@ def handle_pooling(spec, bottom):
             strides=(stride_h, stride_w),
             name=spec.name,
             data_format='channels_first')(bottom)
-        #pdb.set_trace()
         return mp
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
@@ -641,24 +642,24 @@ def convert_weights(param_layers, v='V1'):
                 print("nb_filter")
                 print(nb_filter)
                 print("(channels x height x width)")
-                print("(" + str(temp_stack_size) + " x " + str(nb_col) + " x "
-                      + str(nb_row) + ")")
+                print("(" + str(temp_stack_size) + " x " + str(nb_col) + " x " +
+                      str(nb_row) + ")")
                 print("groups")
                 print(group)
 
             for i in range(group):
                 group_weights = weights_p[
-                    i*nb_filter_per_group:(i+1)*nb_filter_per_group,
-                    i*stacks_size_per_group:(i+1)*stacks_size_per_group,
+                    i * nb_filter_per_group:(i + 1) * nb_filter_per_group,
+                    i * stacks_size_per_group:(i + 1) * stacks_size_per_group,
                     :, :]
                 blob_d = blobs[0].data
-                blob_gw = blob_d[i*group_data_size:(i+1)*group_data_size]
+                blob_gw = blob_d[i * group_data_size:(i + 1) * group_data_size]
                 group_weights[:] \
                     = np.array(blob_gw).reshape(group_weights.shape)
 
             # caffe, unlike theano, does correlation not convolution. We need
             # to flip the weights 180 deg
-            weights_p = rot90(weights_p)
+            # weights_p = rot90(weights_p)
 
             # Keras needs h*w*i*o filters (where d is input, o is output), so
             # we transpose
