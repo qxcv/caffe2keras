@@ -2,11 +2,7 @@ import six
 
 from functools import wraps
 
-from keras.layers import (ZeroPadding2D, Dropout, Conv2D, Flatten, Dense,
-                          BatchNormalization, Activation, MaxPooling2D,
-                          AveragePooling2D, Input, Multiply, Add, Maximum,
-                          Concatenate, Conv2DTranspose, Cropping2D)
-from keras.models import Model
+from codegen import CodeGenerator
 
 from caffe2keras import caffe_pb2 as caffe
 import google.protobuf
@@ -21,6 +17,7 @@ import numpy as np
 debug = False
 # maps layer type names --> converter functions
 _converters = {}
+_cgen = None
 
 
 def construct(type_name, num_bottoms=1, num_tops=1):
@@ -84,12 +81,12 @@ def construct(type_name, num_bottoms=1, num_tops=1):
 @construct('concat', num_bottoms='+')
 def handle_concat(spec, bottoms):
     axis = spec.concat_param.axis
-    return Concatenate(axis=axis, name=spec.name)(bottoms)
+    return _cgen.Concatenate(axis=axis, name=spec.name)(bottoms)
 
 
 @construct('scale')
 def handle_scale(spec, bottom):
-    return Activation('linear')(bottom)
+    return _cgen.Activation('linear')(bottom)
 
 
 @construct('convolution')
@@ -117,7 +114,7 @@ def handle_conv(spec, bottom):
         print(pad_h)
 
     if pad_h + pad_w > 0:
-        bottom = ZeroPadding2D(
+        bottom = _cgen.ZeroPadding2D(
             padding=(int(pad_h), int(pad_w)),
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
@@ -127,7 +124,7 @@ def handle_conv(spec, bottom):
     # & Keras, I can't see where the problem would lie (see NOTES.md). However,
     # if there's an off-by-one error in output size, then it's probable that
     # this code (and possibly my analysis) is incorrect.
-    return Conv2D(
+    return _cgen.Conv2D(
         nb_filter,
         kernel_size=(nb_col, nb_row),
         strides=(stride_h, stride_w),
@@ -136,8 +133,9 @@ def handle_conv(spec, bottom):
         dilation_rate=dilation,
         data_format='channels_first')(bottom)
 
+
 @construct('deconvolution')
-def handle_conv(spec, bottom):
+def handle_deconv(spec, bottom):
     has_bias = spec.convolution_param.bias_term
     nb_filter = spec.convolution_param.num_output
     nb_col = (spec.convolution_param.kernel_size or
@@ -160,11 +158,11 @@ def handle_conv(spec, bottom):
         print("pad")
         print(pad_h)
 
-    #if pad_h + pad_w > 0:
-    #    bottom = ZeroPadding2D(
-    #        padding=(int(pad_h), int(pad_w)),
-    #        name=spec.name + '_zeropadding',
-    #        data_format='channels_first')(bottom)
+    # if pad_h + pad_w > 0:
+    #     bottom = ZeroPadding2D(
+    #         padding=(int(pad_h), int(pad_w)),
+    #         name=spec.name + '_zeropadding',
+    #         data_format='channels_first')(bottom)
 
     # XXX: I remember this sometimes had an off-by-one error on the output
     # shape. After going through the output computation formulae for both Caffe
@@ -172,7 +170,7 @@ def handle_conv(spec, bottom):
     # if there's an off-by-one error in output size, then it's probable that
     # this code (and possibly my analysis) is incorrect.
 
-    deconv = Conv2DTranspose(
+    deconv = _cgen.Conv2DTranspose(
         nb_filter,
         kernel_size=(nb_col, nb_row),
         strides=(stride_h, stride_w),
@@ -181,18 +179,20 @@ def handle_conv(spec, bottom):
         dilation_rate=dilation,
         data_format='channels_first')(bottom)
 
-    crop = Cropping2D(cropping=((pad_h, pad_h),(pad_w, pad_w)),data_format='channels_first')(deconv)
+    crop = _cgen.Cropping2D(cropping=((pad_h, pad_h), (pad_w, pad_w)),
+                            data_format='channels_first')(deconv)
     return crop
+
 
 @construct('dropout')
 def handle_dropout(spec, bottom):
     prob = spec.dropout_param.dropout_ratio
-    return Dropout(prob, name=spec.name)(bottom)
+    return _cgen.Dropout(prob, name=spec.name)(bottom)
 
 
 @construct('flatten')
 def handle_flatten(spec, bottom):
-    return Flatten(name=spec.name)(bottom)
+    return _cgen.Flatten(name=spec.name)(bottom)
 
 
 @construct('innerproduct')
@@ -201,9 +201,9 @@ def handle_dense(spec, bottom):
     output_dim = spec.inner_product_param.num_output
 
     if len(bottom._keras_shape[1:]) > 1:
-        bottom = Flatten(name=name + '_flatten')(bottom)
+        bottom = _cgen.Flatten(name=name + '_flatten')(bottom)
 
-    return Dense(output_dim, name=name)(bottom)
+    return _cgen.Dense(output_dim, name=name)(bottom)
 
 
 @construct('pooling')
@@ -252,7 +252,7 @@ def handle_pooling(spec, bottom):
     # been using (fake) padding in my protoxtxts to get around the problem, but
     # this should be fixed properly at some point.
     if pad_h + pad_w > 0:
-        bottom = ZeroPadding2D(
+        bottom = _cgen.ZeroPadding2D(
             padding=(pad_h, pad_w),
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
@@ -261,7 +261,7 @@ def handle_pooling(spec, bottom):
         border_mode = 'valid'
         if debug:
             print("MAX pooling")
-        mp = MaxPooling2D(
+        mp = _cgen.MaxPooling2D(
             padding=border_mode,
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
@@ -271,7 +271,7 @@ def handle_pooling(spec, bottom):
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
             print("AVE pooling")
-        return AveragePooling2D(
+        return _cgen.AveragePooling2D(
             pool_size=(kernel_h, kernel_w),
             strides=(stride_h, stride_w),
             name=spec.name,
@@ -284,22 +284,22 @@ def handle_pooling(spec, bottom):
 
 @construct('relu')
 def handle_relu(spec, bottom):
-    return Activation('relu', name=spec.name)(bottom)
+    return _cgen.Activation('relu', name=spec.name)(bottom)
 
 
 @construct('sigmoid')
 def handle_sigmoid(spec, bottom):
-    return Activation('sigmoid', name=spec.name)(bottom)
+    return _cgen.Activation('sigmoid', name=spec.name)(bottom)
 
 
 @construct(['softmax', 'softmaxwithloss'])
 def handle_softmax(spec, bottom):
-    return Activation('softmax', name=spec.name)(bottom)
+    return _cgen.Activation('softmax', name=spec.name)(bottom)
 
 
 @construct('tanh')
 def handle_tanh(spec, bottom):
-    return Activation('tanh', name=spec.name)(bottom)
+    return _cgen.Activation('tanh', name=spec.name)(bottom)
 
 
 @construct('eltwise', num_bottoms='+')
@@ -307,15 +307,15 @@ def handle_eltwise(spec, bottoms):
     # axis = spec.scale_param.axis
     op = spec.eltwise_param.operation  # PROD=0, SUM=1, MAX=2
     if op == 0:
-        Merger = Multiply
+        Merger = 'Multiply'
     elif op == 1:
-        Merger = Add
+        Merger = 'Add'
     elif op == 2:
-        Merger = Maximum
+        Merger = 'Maximum'
     else:
         raise NotImplementedError(
             'Operation with id=%d of eltwise layer is not implemented' % op)
-    return Merger(name=spec.name)(bottoms)
+    return _cgen.invoked(Merger, name=spec.name)(bottoms)
 
 
 def _make_slicer(slices):
@@ -372,7 +372,7 @@ def handle_batch_norm(spec, bottom):
         print('axis')
         print(axis)
 
-    return BatchNormalization(
+    return _cgen.BatchNormalization(
         epsilon=epsilon,
         momentum=decay,
         axis=axis,
@@ -391,13 +391,13 @@ def handle_input(spec, bottoms):
         for shape, top_name in zip(all_shapes, spec.top):
             # Keras will auto-configure dim0 as batchsize None. Ignore Caffe
             # batch size.
-            new_in = Input(shape=shape.dim[1:], name=top_name)
+            new_in = _cgen.Input(shape=shape.dim[1:], name=top_name)
             rv.append(new_in)
     elif len(all_shapes) == 1:
         # copy same input (with same shape) to all tops
         shape, = all_shapes
         for top_name in spec.top:
-            new_in = Input(batch_shape=shape.dim, name=spec.name)
+            new_in = _cgen.Input(batch_shape=shape.dim, name=spec.name)
             rv.append(new_in)
     else:
         raise ValueError("Number of output shapes (%d) should be 1, or "
@@ -412,7 +412,7 @@ def _set_debug(is_debug):
     debug = is_debug
 
 
-def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
+def caffe_to_keras(prototext, caffemodel, phase='train', cgen=None, debug=False):
     '''
         Converts a Caffe Graph into a Keras Graph
         prototext: model description file in caffe
@@ -422,6 +422,11 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
         Usage:
             model = caffe_to_keras('VGG16.prototxt', 'VGG16_700iter.caffemodel')
     '''
+    global _cgen
+    if cgen is None:
+        cgen = CodeGenerator(None)
+    _cgen = cgen
+
     _set_debug(debug)
     config = caffe.NetParameter()
     prototext = preprocess_prototxt(prototext)
@@ -473,11 +478,15 @@ def preprocess_prototxt(prototxt):
             p[i] = '  type: "' + type_ + '"'
         # blobs_lr
         # elif len(l) > 9 and l[:9] == 'blobs_lr:':
-        #     print("The prototxt parameter 'blobs_lr' found in line "+str(i+1)+" is outdated and will be removed. Consider using param { lr_mult: X } instead.")
+        #     print("The prototxt parameter 'blobs_lr' found in line "+str(i+1)+
+        #           " is outdated and will be removed. Consider using param { lr_mult: X } "
+        #           "instead.")
         #    p[i] = ''
         #
         # elif len(l) > 13 and l[:13] == 'weight_decay:':
-        #     print("The prototxt parameter 'weight_decay' found in line "+str(i+1)+" is outdated and will be removed. Consider using param { decay_mult: X } instead.")
+        #     print("The prototxt parameter 'weight_decay' found in line "+str(i+1)+
+        #           " is outdated and will be removed. Consider using param { decay_mult: X } "
+        #           "instead.")
         #     p[i] = ''
 
     p = '\n'.join(p)
@@ -559,7 +568,7 @@ def create_model(config, phase, input_dim):
     assert len(model_inputs) >= 1, "No inputs detected"
     assert len(model_outputs) >= 1, "No outputs detected"
 
-    model = Model(inputs=model_inputs, outputs=model_outputs)
+    model = _cgen.Model(inputs=_cgen.keras(model_inputs), outputs=model_outputs)
 
     return model
 
