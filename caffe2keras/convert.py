@@ -5,7 +5,7 @@ from functools import wraps
 from keras.layers import (ZeroPadding2D, Dropout, Conv2D, Flatten, Dense,
                           BatchNormalization, Activation, MaxPooling2D,
                           AveragePooling2D, Input, Multiply, Add, Maximum,
-                          Concatenate)
+                          Concatenate, Conv2DTranspose, Cropping2D)
 from keras.models import Model
 
 from caffe2keras import caffe_pb2 as caffe
@@ -136,6 +136,53 @@ def handle_conv(spec, bottom):
         dilation_rate=dilation,
         data_format='channels_first')(bottom)
 
+@construct('deconvolution')
+def handle_conv(spec, bottom):
+    has_bias = spec.convolution_param.bias_term
+    nb_filter = spec.convolution_param.num_output
+    nb_col = (spec.convolution_param.kernel_size or
+              [spec.convolution_param.kernel_h])[0]
+    nb_row = (spec.convolution_param.kernel_size or
+              [spec.convolution_param.kernel_w])[0]
+    stride_h = (spec.convolution_param.stride or
+                [spec.convolution_param.stride_h])[0] or 1
+    stride_w = (spec.convolution_param.stride or
+                [spec.convolution_param.stride_w])[0] or 1
+    pad_h = (spec.convolution_param.pad or [spec.convolution_param.pad_h])[0]
+    pad_w = (spec.convolution_param.pad or [spec.convolution_param.pad_w])[0]
+    dilation = spec.convolution_param.dilation or (1, 1)
+
+    if debug:
+        print("kernel")
+        print(str(nb_filter) + 'x' + str(nb_col) + 'x' + str(nb_row))
+        print("stride")
+        print(stride_h)
+        print("pad")
+        print(pad_h)
+
+    #if pad_h + pad_w > 0:
+    #    bottom = ZeroPadding2D(
+    #        padding=(int(pad_h), int(pad_w)),
+    #        name=spec.name + '_zeropadding',
+    #        data_format='channels_first')(bottom)
+
+    # XXX: I remember this sometimes had an off-by-one error on the output
+    # shape. After going through the output computation formulae for both Caffe
+    # & Keras, I can't see where the problem would lie (see NOTES.md). However,
+    # if there's an off-by-one error in output size, then it's probable that
+    # this code (and possibly my analysis) is incorrect.
+
+    deconv = Conv2DTranspose(
+        nb_filter,
+        kernel_size=(nb_col, nb_row),
+        strides=(stride_h, stride_w),
+        use_bias=has_bias,
+        name=spec.name,
+        dilation_rate=dilation,
+        data_format='channels_first')(bottom)
+
+    crop = Cropping2D(cropping=((pad_h, pad_h),(pad_w, pad_w)),data_format='channels_first')(deconv)
+    return crop
 
 @construct('dropout')
 def handle_dropout(spec, bottom):
@@ -592,7 +639,7 @@ def convert_weights(param_layers, v='V1'):
                 weights_beta.astype(dtype=np.float32)
             ]
 
-        elif typ == 'convolution':
+        elif typ == 'convolution' or typ == 'deconvolution':
             blobs = layer.blobs
 
             if (v == 'V1'):
