@@ -1,15 +1,20 @@
+import re
+import types
 import string
+import inspect
 import functools
 from keras.layers import *  # noqa
-from keras.models import Model  # noqa
+from keras.models import Model
+from caffe2keras.extra_layers import Select  # noqa
 
 indent = 4
 ret_model = 'ret_model'
+max_var_len = 12
 
 
 def varname(obj):
     '''varname makes variable names from keras / tensorflow objects'''
-    n = obj.name.replace(':', '_')
+    n = obj.name.replace(':', '_C_')
     slash_index = string.find(n, '/')
     if slash_index >= 0:
         n = n[:slash_index]
@@ -19,6 +24,8 @@ def varname(obj):
 class CodeGenerator(object):
     '''CodeGenerator object is a passthrough for printing code to generate the
        objects, while actaully generating the objects.'''
+    _varname_registry = {}
+    _var_count = 0
 
     class StringFunctor(object):
         '''StringFunctor is a callable object that prints itself when called.
@@ -51,14 +58,30 @@ class CodeGenerator(object):
             except:
                 if isinstance(prev, CodeGenerator.StringFunctor):
                     return CodeGenerator.StringFunctor.to_varname(prev.obj)
-                return varname(prev)
+                return CodeGenerator.varname(prev)
+
+    @staticmethod
+    def varname(vn):
+        vn = varname(vn)
+        if len(vn) > max_var_len:
+            if vn in CodeGenerator._varname_registry:
+                vn = CodeGenerator._varname_registry[vn]
+            else:
+                vns = vn[:max_var_len] + '_' + "%.04d" % CodeGenerator._var_count
+                CodeGenerator._var_count += 1
+                CodeGenerator._varname_registry[vn] = vns
+                vn = vns
+        return vn
 
     def __init__(self, filename):
         self.f = None
+        # XXX This is really brittle. At least balance the parens.
+        self.lambda_re = re.compile("Lambda\(([^)]*)\)")
 
         if filename is not None:
             imports = """from keras.layers import *  # noqa
-from keras.models import Model  # noqa"""
+from keras.models import Model
+from caffe2keras.extra_layers import Select"""
 
             self.f = open(filename, "w")
             print >> self.f, imports
@@ -79,9 +102,26 @@ from keras.models import Model  # noqa"""
             except:
                 return nodes
 
-    def invoked(self, a, *args, **kwargs):
+    def invoked(self, a, *pre_args, **kwargs):
         '''invoked is the general passthrough layer that creates the object
            creation string and then generats the StringFunctor based on it'''
+
+        class RawRepr(object):
+            def __init__(self, out):
+                self.out = out
+
+            def __repr__(self):
+                return self.out
+
+        args = []
+        for arg in pre_args:
+            if isinstance(arg, types.FunctionType):
+                codestr = inspect.getsource(arg.func_code)
+                m = self.lambda_re.search(codestr)
+                codestr = m.group(1)
+                args.append(RawRepr(codestr))
+            else:
+                args.append(arg)
 
         # Create the object
         s = "{}(".format(a)
@@ -92,20 +132,20 @@ from keras.models import Model  # noqa"""
         skwargs = ',\n'.join([str(x) + '=' + repr(kwargs[x]) for x in kwargs.keys()]).replace('?', 'None')
 
         # put the string form of args and kwargs in the braces
-        s += ',\n'.join([x for x in [sargs, skwargs] if x != '']).lstrip()
+        s += ',\n'.join([x for x in [sargs, skwargs] if x != ''])
         s += ')'
 
         # generate the object
         obj = eval(s)
 
         # get a variable name for the object (this will be what the script things it's called
-        varset = varname(obj) + ' = '
+        varset = CodeGenerator.varname(obj) + ' = '
 
         # re-indent the whole thing based on the line '<indent>varname = Object('
         sset = s.split('\n')
-        prestr = ''.join(' ' for _ in range(indent))
+        prestr = ' ' * indent
         s = prestr + varset + sset[0]
-        prestr = ''.join(' ' for _ in range(string.find(s, '(') + 1))
+        prestr = ' ' * (string.find(s, '(') + 1)
         srest = [prestr + snext for snext in sset[1:]]
         s = '\n'.join([s] + srest)
 

@@ -9,7 +9,6 @@ import google.protobuf
 import google.protobuf.text_format
 from caffe2keras.caffe_utils import (layer_type, normalize_layers,
                                      get_output_names, is_data_input)
-from caffe2keras.extra_layers import Select
 
 import numpy as np
 
@@ -76,6 +75,12 @@ def construct(type_name, num_bottoms=1, num_tops=1):
         return wrapper
 
     return take_func
+
+
+@construct('silence')
+def handle_silence(spec, bottom):
+    # return _cgen.Lambda(lambda x: x)(bottom)
+    return None
 
 
 @construct('concat', num_bottoms='+')
@@ -180,6 +185,7 @@ def handle_deconv(spec, bottom):
         data_format='channels_first')(bottom)
 
     crop = _cgen.Cropping2D(cropping=((pad_h, pad_h), (pad_w, pad_w)),
+                            name=spec.name + '_cropping',
                             data_format='channels_first')(deconv)
     return crop
 
@@ -350,7 +356,7 @@ def handle_slice(spec, bottom):
         else:
             slice_end = None
         top_name = spec.top[top_idx]
-        out = Select(slice_begin, slice_end, name=top_name)(_cgen.keras(bottom))
+        out = _cgen.Select(slice_begin, slice_end, name=top_name)(bottom)
         rv.append(out)
 
         if debug:
@@ -552,6 +558,7 @@ def create_model(config, phase, input_dim):
         if type_of_layer in _converters:
             converter = _converters[type_of_layer]
             out_blobs = converter(layer, layer_bottom_blobs)
+            out_blobs = [blob for blob in out_blobs if blob is not None]
             assert len(out_blobs) == len(tops)
             for blob, blob_name in zip(out_blobs, tops):
                 blobs[blob_name] = blob
