@@ -74,7 +74,10 @@ from keras.models import Model  # noqa"""
         try:
             return [n.obj for n in nodes]
         except:
-            return nodes.obj
+            try:
+                return nodes.obj
+            except:
+                return nodes
 
     def invoked(self, a, *args, **kwargs):
         '''invoked is the general passthrough layer that creates the object

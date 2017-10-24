@@ -350,7 +350,7 @@ def handle_slice(spec, bottom):
         else:
             slice_end = None
         top_name = spec.top[top_idx]
-        out = Select(slice_begin, slice_end, name=top_name)(bottom)
+        out = Select(slice_begin, slice_end, name=top_name)(_cgen.keras(bottom))
         rv.append(out)
 
         if debug:
