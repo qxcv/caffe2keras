@@ -1,4 +1,5 @@
 import six
+import sys
 
 from functools import wraps
 
@@ -557,7 +558,16 @@ def create_model(config, phase, input_dim):
 
         if type_of_layer in _converters:
             converter = _converters[type_of_layer]
-            out_blobs = converter(layer, layer_bottom_blobs)
+            try:
+                out_blobs = converter(layer, layer_bottom_blobs)
+            except Exception, e:
+                print >> sys.stderr, "Failed layer: ", e
+                print >> sys.stderr, "Code will generate up to that layer"
+                model_outputs.extend(layer_bottom_blobs)
+                _cgen.Model(inputs=_cgen.keras(model_inputs), outputs=model_outputs)
+                _cgen.close()
+                raise(e)
+
             out_blobs = [blob for blob in out_blobs if blob is not None]
             assert len(out_blobs) == len(tops)
             for blob, blob_name in zip(out_blobs, tops):
