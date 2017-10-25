@@ -325,6 +325,13 @@ def handle_eltwise(spec, bottoms):
     return _cgen.invoked(Merger, name=spec.name)(bottoms)
 
 
+@construct('threshold')
+def handle_threshold(spec, bottom):
+    threshold = spec.threshold_param.threshold
+    s = 'lambda x: K.greater(x, {})'.format(threshold)
+    return _cgen.LambdaStr(s, name=spec.name)(bottom)
+
+
 def _make_slicer(slices):
     # this function exists because Python makes it hard to construct closures
     # in loops
@@ -592,6 +599,8 @@ def create_model(config, phase, input_dim):
                 if is_data_input(layer):
                     model_inputs.append(blob)
         else:
+            _cgen.Model(inputs=_cgen.keras(model_inputs), outputs=model_outputs)
+            _cgen.close()
             raise RuntimeError('layer type', type_of_layer,
                                'used in this model is not currently supported')
 

@@ -5,7 +5,7 @@ import inspect
 import functools
 from keras.layers import *  # noqa
 from keras.models import Model
-from caffe2keras.extra_layers import Select  # noqa
+from keras import backend as K  # noqa
 
 indent = 4
 ret_model = 'ret_model'
@@ -89,7 +89,7 @@ class CodeGenerator(object):
         if filename is not None:
             imports = """from keras.layers import *  # noqa
 from keras.models import Model
-from caffe2keras.extra_layers import Select"""
+from keras import backend as K  # noqa"""
 
             self.f = open(filename, "w")
             print >> self.f, imports
