@@ -331,13 +331,25 @@ def _make_slicer(slices):
     return lambda l: l[slices]
 
 
+def safe_int_str(x):
+    if x is None:
+        return ''
+    return str(x)
+
+
+def get_slice_lambda_expression(axis, begin, end):
+    return 'lambda x: x[' + ':, ' * axis + '%s: %s]' % (safe_int_str(begin),
+                                                        safe_int_str(end))
+
+
 @construct('slice', num_tops='+')
 def handle_slice(spec, bottom):
     sp = spec.slice_param
     slice_points = sp.slice_point
     assert len(slice_points) + 1 == len(spec.top), \
         "slice points must be one less than top count at %s" % spec.name
-    axis = sp.axis or sp.slice_dim
+    # XXX if slice_dim is set, somehow the axis will still wind up with a 1. Ignore it?
+    axis = sp.slice_dim or sp.axis
 
     if debug:
         print('-- Slice (%s)' % spec.name)
@@ -357,7 +369,8 @@ def handle_slice(spec, bottom):
         else:
             slice_end = None
         top_name = spec.top[top_idx]
-        out = _cgen.Select(slice_begin, slice_end, name=top_name)(bottom)
+        out = _cgen.LambdaStr(get_slice_lambda_expression(axis, slice_begin, slice_end),
+                              name=top_name)(bottom)
         rv.append(out)
 
         if debug:

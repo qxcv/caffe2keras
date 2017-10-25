@@ -21,6 +21,14 @@ def varname(obj):
     return n
 
 
+class RawRepr(object):
+    def __init__(self, out):
+        self.out = out
+
+    def __repr__(self):
+        return self.out
+
+
 class CodeGenerator(object):
     '''CodeGenerator object is a passthrough for printing code to generate the
        objects, while actaully generating the objects.'''
@@ -106,13 +114,6 @@ from caffe2keras.extra_layers import Select"""
         '''invoked is the general passthrough layer that creates the object
            creation string and then generats the StringFunctor based on it'''
 
-        class RawRepr(object):
-            def __init__(self, out):
-                self.out = out
-
-            def __repr__(self):
-                return self.out
-
         args = []
         for arg in pre_args:
             if isinstance(arg, types.FunctionType):
@@ -154,6 +155,10 @@ from caffe2keras.extra_layers import Select"""
     def __getattr__(self, a):
         '''__getattr__ for any method binds the 'invoked' to that method'''
         return functools.partial(self.invoked, a)
+
+    def LambdaStr(self, expr, *args, **kwargs):
+        expr = RawRepr(expr)
+        return self.invoked('Lambda', expr, *args, **kwargs)
 
     def Input(self, *args, **kwargs):  # noqa
         '''Input needs a special override - Input needs to get printed at
