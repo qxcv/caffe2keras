@@ -80,7 +80,11 @@ def construct(type_name, num_bottoms=1, num_tops=1):
 
 @construct('silence')
 def handle_silence(spec, bottom):
-    # return _cgen.Lambda(lambda x: x)(bottom)
+    return None
+
+
+@construct('euclideanloss', num_bottoms='+')
+def handle_loss(spec, bottoms):
     return None
 
 
@@ -582,8 +586,17 @@ def create_model(config, phase, input_dim):
                 _cgen.close()
                 raise(e)
 
+            # Dead layers return None - sweep them away
             out_blobs = [blob for blob in out_blobs if blob is not None]
-            assert len(out_blobs) == len(tops)
+
+            # If this layer was supposed to have output (tops), but it's a dead
+            # layer in Keras (construct returned None) AND the tops are just
+            # itself (layer.name == layer.top[0]), then we will skip this layer and
+            # terminate this branch in the output of the last layer (layer_bottom_blobs)
+            if len(tops) == 1 and len(out_blobs) == 0 and layer.name == layer.top[0]:
+                model_outputs.extend(layer_bottom_blobs)
+            else:
+                assert len(out_blobs) == len(tops)
             for blob, blob_name in zip(out_blobs, tops):
                 blobs[blob_name] = blob
 
