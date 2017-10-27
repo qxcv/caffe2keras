@@ -3,7 +3,7 @@ import sys
 
 from functools import wraps
 
-from codegen import CodeGenerator
+from caffe2keras.codegen import CodeGenerator
 
 from caffe2keras import caffe_pb2 as caffe
 import google.protobuf
@@ -216,14 +216,8 @@ def handle_dense(spec, bottom):
 @construct('pooling')
 def handle_pooling(spec, bottom):
 
-    def int_or_none(x):
-        try:
-            return int(x)
-        except:
-            return None
-
     # Dimention(None) is not convertable to int
-    shape = map(int_or_none, bottom.shape)
+    shape = [int(s) for s in bottom.shape[1:]]
 
     kernel_h = spec.pooling_param.kernel_size or spec.pooling_param.kernel_h
     kernel_w = spec.pooling_param.kernel_size or spec.pooling_param.kernel_w
@@ -236,12 +230,12 @@ def handle_pooling(spec, bottom):
     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
 
     caffe_compute_height = np.ceil(
-        (float(shape[2]) + 2 * pad_h - kernel_h) / stride_h + 1)
+        (float(shape[1]) + 2 * pad_h - kernel_h) / stride_h + 1)
     caffe_compute_width = np.ceil(
-        (float(shape[3]) + 2 * pad_w - kernel_w) / stride_w + 1)
+        (float(shape[2]) + 2 * pad_w - kernel_w) / stride_w + 1)
 
-    compute_height = (shape[2] + 2 * pad_h - kernel_h) / stride_h + 1
-    compute_width = (shape[3] + 2 * pad_w - kernel_w) / stride_w + 1
+    compute_height = (shape[1] + 2 * pad_h - kernel_h) // stride_h + 1
+    compute_width = (shape[2] + 2 * pad_w - kernel_w) // stride_w + 1
 
     pad_h = int(caffe_compute_height - compute_height + pad_h)
     pad_w = int(caffe_compute_width - compute_width + pad_w)
@@ -580,7 +574,7 @@ def create_model(config, phase, input_dim):
             converter = _converters[type_of_layer]
             try:
                 out_blobs = converter(layer, layer_bottom_blobs)
-            except Exception, e:
+            except Exception as e:
                 print >> sys.stderr, "Failed layer: ", e
                 print >> sys.stderr, "Code will generate up to that layer"
                 model_outputs.extend(layer_bottom_blobs)

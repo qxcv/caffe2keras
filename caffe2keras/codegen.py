@@ -1,6 +1,6 @@
+from __future__ import print_function
 import re
 import types
-import string
 import inspect
 import functools
 from keras.layers import *  # noqa
@@ -15,7 +15,7 @@ max_var_len = 12
 def varname(obj):
     '''varname makes variable names from keras / tensorflow objects'''
     n = obj.name.replace(':', '_C_')
-    slash_index = string.find(n, '/')
+    slash_index = n.find('/')
     if slash_index >= 0:
         n = n[:slash_index]
     return n
@@ -49,7 +49,7 @@ class CodeGenerator(object):
             if self.f is not None:
                 # Convert the passed in argument to its variable name for printing
                 v = self.to_varname(prev)
-                print >> self.f, self.s + '(%s)' % str(v)
+                print(self.s + '(%s)' % str(v), file=self.f)
 
             # These may be keras, tensorflow, or StringFunctors. Need to get to the
             # raw object to do the call
@@ -92,11 +92,11 @@ from keras.models import Model
 from keras import backend as K  # noqa"""
 
             self.f = open(filename, "w")
-            print >> self.f, imports
-            print >> self.f
-            print >> self.f
-            print >> self.f, "def make_model():"
-            print >> self.f
+            print(imports, file=self.f)
+            print(file=self.f)
+            print(file=self.f)
+            print("def make_model():", file=self.f)
+            print(file=self.f)
 
     @staticmethod
     def keras(nodes):
@@ -146,7 +146,7 @@ from keras import backend as K  # noqa"""
         sset = s.split('\n')
         prestr = ' ' * indent
         s = prestr + varset + sset[0]
-        prestr = ' ' * (string.find(s, '(') + 1)
+        prestr = ' ' * (s.find('(') + 1)
         srest = [prestr + snext for snext in sset[1:]]
         s = '\n'.join([s] + srest)
 
@@ -167,7 +167,7 @@ from keras import backend as K  # noqa"""
         sf = self.invoked('Input', *args, **kwargs)
         # Input is special, there is no before to activate him
         if self.f is not None:
-            print >> self.f, sf.s
+            print(sf.s, file=self.f)
         return sf
 
     def Model(self, *args, **kwargs):  # noqa
@@ -182,11 +182,11 @@ from keras import backend as K  # noqa"""
         s = ',\n'.join([base] + srest) + ')'
 
         if self.f is not None:
-            print >> self.f, s
+            print(s, file=self.f)
         return Model(**kwargs)
 
     def close(self):
         '''close finishes the file and closes it.'''
         if self.f is not None:
-            print >> self.f, ''.join(' ' for _ in range(indent)) + "return %s" % ret_model
+            print(''.join(' ' for _ in range(indent)) + "return %s" % ret_model, file=self.f)
             self.f.close()
