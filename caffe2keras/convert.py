@@ -216,12 +216,8 @@ def handle_dense(spec, bottom):
 
     return _cgen.Dense(output_dim, name=name)(bottom)
 
-
 @construct('pooling')
 def handle_pooling(spec, bottom):
-
-    # Dimention(None) is not convertable to int
-    shape = [int(s) for s in bottom.shape[1:]]
 
     kernel_h = spec.pooling_param.kernel_size or spec.pooling_param.kernel_h
     kernel_w = spec.pooling_param.kernel_size or spec.pooling_param.kernel_w
@@ -233,58 +229,103 @@ def handle_pooling(spec, bottom):
     pad_h = spec.pooling_param.pad or spec.pooling_param.pad_h
     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
 
-    caffe_compute_height = np.ceil(
-        (float(shape[1]) + 2 * pad_h - kernel_h) / stride_h + 1)
-    caffe_compute_width = np.ceil(
-        (float(shape[2]) + 2 * pad_w - kernel_w) / stride_w + 1)
 
-    compute_height = (shape[1] + 2 * pad_h - kernel_h) // stride_h + 1
-    compute_width = (shape[2] + 2 * pad_w - kernel_w) // stride_w + 1
-
-    pad_h = int(caffe_compute_height - compute_height + pad_h)
-    pad_w = int(caffe_compute_width - compute_width + pad_w)
-    if debug:
-        print("kernel")
-        print(str(kernel_h) + 'x' + str(kernel_w))
-        print("stride")
-        print(stride_h)
-        print("pad")
-        print(pad_h)
-        print(pad_w)
-
-    # XXX: This sometimes produces outputs which are too small by ~1px. IIRC
-    # Caffe uses a different method to Keras for computing output sizes. I've
-    # been using (fake) padding in my protoxtxts to get around the problem, but
-    # this should be fixed properly at some point.
-    if pad_h + pad_w > 0:
-        bottom = _cgen.ZeroPadding2D(
-            padding=(pad_h, pad_w),
-            name=spec.name + '_zeropadding',
-            data_format='channels_first')(bottom)
     if spec.pooling_param.pool == 0:  # MAX pooling
         # border_mode = 'same'
-        border_mode = 'valid'
+        border_mode = 'same'
         if debug:
             print("MAX pooling")
         mp = _cgen.MaxPooling2D(
             padding=border_mode,
             pool_size=(kernel_h, kernel_w),
-            strides=(stride_h, stride_w),
-            name=spec.name,
+            strides=(1, 1),
+            name=spec.name + 'maxpooling',
             data_format='channels_first')(bottom)
-        return mp
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
             print("AVE pooling")
-        return _cgen.AveragePooling2D(
+        mp = _cgen.AveragePooling2D(
             pool_size=(kernel_h, kernel_w),
-            strides=(stride_h, stride_w),
-            name=spec.name,
+            strides=(1, 1),
+            name=spec.name + 'avgpooling',
             data_format='channels_first')(bottom)
+
+    ds = _cgen.LambdaStr('lambda x: x[:, :, {}::{}, {}::{} ]'.format(pad_h, stride_h, pad_w, stride_w),
+                         name=spec.name)(mp)
+    return ds
 
     # Stochastic pooling still needs to be implemented
     raise NotImplementedError(
         "Only MAX and AVE pooling are implemented in keras!")
+
+# @construct('pooling')
+# def handle_pooling(spec, bottom):
+#
+#     # Dimention(None) is not convertable to int
+#     shape = [int(s) for s in bottom.shape[1:]]
+#
+#     kernel_h = spec.pooling_param.kernel_size or spec.pooling_param.kernel_h
+#     kernel_w = spec.pooling_param.kernel_size or spec.pooling_param.kernel_w
+#
+#     # caffe defaults to 1, hence both of the params can be zero. 'or 1'
+#     stride_h = spec.pooling_param.stride or spec.pooling_param.stride_h or 1
+#     stride_w = spec.pooling_param.stride or spec.pooling_param.stride_w or 1
+#
+#     pad_h = spec.pooling_param.pad or spec.pooling_param.pad_h
+#     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
+#
+#     caffe_compute_height = np.ceil(
+#         (float(shape[1]) + 2 * pad_h - kernel_h) / stride_h + 1)
+#     caffe_compute_width = np.ceil(
+#         (float(shape[2]) + 2 * pad_w - kernel_w) / stride_w + 1)
+#
+#     compute_height = (shape[1] + 2 * pad_h - kernel_h) // stride_h + 1
+#     compute_width = (shape[2] + 2 * pad_w - kernel_w) // stride_w + 1
+#
+#     pad_h = int(caffe_compute_height - compute_height + pad_h)
+#     pad_w = int(caffe_compute_width - compute_width + pad_w)
+#     if debug:
+#         print("kernel")
+#         print(str(kernel_h) + 'x' + str(kernel_w))
+#         print("stride")
+#         print(stride_h)
+#         print("pad")
+#         print(pad_h)
+#         print(pad_w)
+#
+#     # XXX: This sometimes produces outputs which are too small by ~1px. IIRC
+#     # Caffe uses a different method to Keras for computing output sizes. I've
+#     # been using (fake) padding in my protoxtxts to get around the problem, but
+#     # this should be fixed properly at some point.
+#     if pad_h + pad_w > 0:
+#         bottom = _cgen.ZeroPadding2D(
+#             padding=(pad_h, pad_w),
+#             name=spec.name + '_zeropadding',
+#             data_format='channels_first')(bottom)
+#     if spec.pooling_param.pool == 0:  # MAX pooling
+#         # border_mode = 'same'
+#         border_mode = 'valid'
+#         if debug:
+#             print("MAX pooling")
+#         mp = _cgen.MaxPooling2D(
+#             padding=border_mode,
+#             pool_size=(kernel_h, kernel_w),
+#             strides=(stride_h, stride_w),
+#             name=spec.name,
+#             data_format='channels_first')(bottom)
+#         return mp
+#     elif (spec.pooling_param.pool == 1):  # AVE pooling
+#         if debug:
+#             print("AVE pooling")
+#         return _cgen.AveragePooling2D(
+#             pool_size=(kernel_h, kernel_w),
+#             strides=(stride_h, stride_w),
+#             name=spec.name,
+#             data_format='channels_first')(bottom)
+#
+#     # Stochastic pooling still needs to be implemented
+#     raise NotImplementedError(
+#         "Only MAX and AVE pooling are implemented in keras!")
 
 
 @construct('relu')
