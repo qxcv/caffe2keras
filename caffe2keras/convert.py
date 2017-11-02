@@ -96,7 +96,8 @@ def handle_concat(spec, bottoms):
 
 @construct('scale')
 def handle_scale(spec, bottom):
-    return _cgen.Activation('linear')(bottom)
+    return _cgen.Scale(axis=1, name=spec.name)(bottom)
+    #return _cgen.Activation('linear')(bottom)
 
 
 @construct('convolution')
@@ -257,7 +258,7 @@ def handle_pooling(spec, bottom):
     # Stochastic pooling still needs to be implemented
     raise NotImplementedError(
         "Only MAX and AVE pooling are implemented in keras!")
-
+#
 # @construct('pooling')
 # def handle_pooling(spec, bottom):
 #
@@ -818,6 +819,11 @@ def load_weights(model, weights):
     for layer in model.layers:
         # TODO: add a check to make sure we're not jumping over any layers with
         # trainable weights
+        if 'scale_' in layer.name:
+            print "*"*64
+            print "*" * 64
+            print layer.name
+            print layer
         if layer.name in weights:
             print('Copying weights for %s' % layer.name)
             model.get_layer(layer.name).set_weights(weights[layer.name])

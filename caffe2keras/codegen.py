@@ -4,6 +4,7 @@ import types
 import inspect
 import functools
 from keras.layers import *  # noqa
+from .extra_layers import Scale # noqa
 from keras.models import Model
 from keras import backend as K  # noqa
 
@@ -89,7 +90,12 @@ class CodeGenerator(object):
         if filename is not None:
             imports = """from keras.layers import *  # noqa
 from keras.models import Model
-from keras import backend as K  # noqa"""
+from keras import backend as K  # noqa
+try:
+    from caffe2keras.extra_layers.Scale import Scale #noqa
+except:
+    print "find the layer Scale"
+"""
 
             self.f = open(filename, "w")
             print(imports, file=self.f)
