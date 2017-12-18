@@ -621,8 +621,6 @@ def create_model(config, phase, input_dim):
             try:
                 out_blobs = converter(layer, layer_bottom_blobs)
             except Exception as e:
-                print("Failed layer: ", e, file=sys.stderr)
-                print("Code will generate up to that layer", file=sys.stderr)
                 model_outputs.extend(layer_bottom_blobs)
                 _cgen.Model(inputs=_cgen.keras(model_inputs), outputs=model_outputs)
                 _cgen.close()
