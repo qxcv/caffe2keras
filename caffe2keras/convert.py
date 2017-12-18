@@ -621,8 +621,8 @@ def create_model(config, phase, input_dim):
             try:
                 out_blobs = converter(layer, layer_bottom_blobs)
             except Exception as e:
-                print >> sys.stderr, "Failed layer: ", e
-                print >> sys.stderr, "Code will generate up to that layer"
+                print("Failed layer: ", e, file=sys.stderr)
+                print("Code will generate up to that layer", file=sys.stderr)
                 model_outputs.extend(layer_bottom_blobs)
                 _cgen.Model(inputs=_cgen.keras(model_inputs), outputs=model_outputs)
                 _cgen.close()
@@ -820,10 +820,10 @@ def load_weights(model, weights):
         # TODO: add a check to make sure we're not jumping over any layers with
         # trainable weights
         if 'scale_' in layer.name:
-            print "*"*64
-            print "*" * 64
-            print layer.name
-            print layer
+            print("*"*64)
+            print("*" * 64)
+            print(layer.name)
+            print(layer)
         if layer.name in weights:
             print('Copying weights for %s' % layer.name)
             model.get_layer(layer.name).set_weights(weights[layer.name])

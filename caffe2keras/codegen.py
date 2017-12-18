@@ -94,7 +94,7 @@ from keras import backend as K  # noqa
 try:
     from caffe2keras.extra_layers.Scale import Scale #noqa
 except:
-    print "find the layer Scale"
+    print("find the layer Scale")
 """
 
             self.f = open(filename, "w")
