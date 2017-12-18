@@ -91,10 +91,7 @@ class CodeGenerator(object):
             imports = """from keras.layers import *  # noqa
 from keras.models import Model
 from keras import backend as K  # noqa
-try:
-    from caffe2keras.extra_layers.Scale import Scale #noqa
-except:
-    print("find the layer Scale")
+from caffe2keras.extra_layers import Scale #noqa
 """
 
             self.f = open(filename, "w")
