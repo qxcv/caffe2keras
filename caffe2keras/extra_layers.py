@@ -3,7 +3,6 @@ from keras import initializers as initializations
 from keras.engine import Layer, InputSpec
 
 
-
 class Select(Layer):
     """Selects a configurable part of an input tensor. Useful for dividing
     tensors up to make them go different places."""
