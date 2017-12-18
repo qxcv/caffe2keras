@@ -4,7 +4,7 @@ import types
 import inspect
 import functools
 from keras.layers import *  # noqa
-from .extra_layers import Scale # noqa
+from .extra_layers import Scale  # noqa
 from keras.models import Model
 from keras import backend as K  # noqa
 
@@ -15,7 +15,7 @@ max_var_len = 12
 
 def varname(obj):
     '''varname makes variable names from keras / tensorflow objects'''
-    n = obj.name.replace(':', '_C_')
+    n = obj.name.replace(':', '_C_').replace('-', '__')
     slash_index = n.find('/')
     if slash_index >= 0:
         n = n[:slash_index]
