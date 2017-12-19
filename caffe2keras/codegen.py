@@ -91,7 +91,10 @@ class CodeGenerator(object):
             imports = """from keras.layers import *  # noqa
 from keras.models import Model
 from keras import backend as K  # noqa
-from caffe2keras.extra_layers import Scale #noqa
+try:
+    from caffe2keras.extra_layers import Scale  # noqa
+except:
+    from caffe2keras.caffe2keras.extra_layers import Scale  # noqa
 """
 
             self.f = open(filename, "w")
