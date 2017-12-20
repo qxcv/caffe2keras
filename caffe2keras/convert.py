@@ -1,5 +1,4 @@
 import six
-import sys
 
 from functools import wraps
 
@@ -97,7 +96,7 @@ def handle_concat(spec, bottoms):
 @construct('scale')
 def handle_scale(spec, bottom):
     return _cgen.Scale(axis=1, name=spec.name)(bottom)
-    #return _cgen.Activation('linear')(bottom)
+    # return _cgen.Activation('linear')(bottom)
 
 
 @construct('convolution')
@@ -217,6 +216,7 @@ def handle_dense(spec, bottom):
 
     return _cgen.Dense(output_dim, name=name)(bottom)
 
+
 @construct('pooling')
 def handle_pooling(spec, bottom):
 
@@ -229,7 +229,6 @@ def handle_pooling(spec, bottom):
 
     pad_h = spec.pooling_param.pad or spec.pooling_param.pad_h
     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
-
 
     if spec.pooling_param.pool == 0:  # MAX pooling
         # border_mode = 'same'
