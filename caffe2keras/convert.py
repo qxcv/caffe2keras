@@ -13,7 +13,7 @@ import google.protobuf
 import google.protobuf.text_format
 from caffe2keras.caffe_utils import (layer_type, normalize_layers,
                                      get_output_names, is_data_input)
-from caffe2keras.extra_layers import Select
+from caffe2keras.extra_layers import Select, Scale
 
 import numpy as np
 
@@ -81,10 +81,25 @@ def construct(type_name, num_bottoms=1, num_tops=1):
     return take_func
 
 
+@construct('silence')
+def handle_silence(spec, bottom):
+    return None
+
+
+@construct('euclideanloss', num_bottoms='+')
+def handle_loss(spec, bottoms):
+    return None
+
+
 @construct('concat', num_bottoms='+')
 def handle_concat(spec, bottoms):
     axis = spec.concat_param.axis
     return Concatenate(axis=axis, name=spec.name)(bottoms)
+
+
+@construct('scale')
+def handle_scale(spec, bottom):
+    return Scale(axis=1, name=spec.name)(bottom)
 
 
 @construct('convolution')
@@ -113,7 +128,7 @@ def handle_conv(spec, bottom):
 
     if pad_h + pad_w > 0:
         bottom = ZeroPadding2D(
-            padding=(pad_h, pad_w),
+            padding=(int(pad_h), int(pad_w)),
             name=spec.name + '_zeropadding',
             data_format='channels_first')(bottom)
 
@@ -130,6 +145,57 @@ def handle_conv(spec, bottom):
         name=spec.name,
         dilation_rate=dilation,
         data_format='channels_first')(bottom)
+
+
+@construct('deconvolution')
+def handle_deconv(spec, bottom):
+    has_bias = spec.convolution_param.bias_term
+    nb_filter = spec.convolution_param.num_output
+    nb_col = (spec.convolution_param.kernel_size or
+              [spec.convolution_param.kernel_h])[0]
+    nb_row = (spec.convolution_param.kernel_size or
+              [spec.convolution_param.kernel_w])[0]
+    stride_h = (spec.convolution_param.stride or
+                [spec.convolution_param.stride_h])[0] or 1
+    stride_w = (spec.convolution_param.stride or
+                [spec.convolution_param.stride_w])[0] or 1
+    pad_h = (spec.convolution_param.pad or [spec.convolution_param.pad_h])[0]
+    pad_w = (spec.convolution_param.pad or [spec.convolution_param.pad_w])[0]
+    dilation = spec.convolution_param.dilation or (1, 1)
+
+    if debug:
+        print("kernel")
+        print(str(nb_filter) + 'x' + str(nb_col) + 'x' + str(nb_row))
+        print("stride")
+        print(stride_h)
+        print("pad")
+        print(pad_h)
+
+    # if pad_h + pad_w > 0:
+    #     bottom = ZeroPadding2D(
+    #         padding=(int(pad_h), int(pad_w)),
+    #         name=spec.name + '_zeropadding',
+    #         data_format='channels_first')(bottom)
+
+    # XXX: I remember this sometimes had an off-by-one error on the output
+    # shape. After going through the output computation formulae for both Caffe
+    # & Keras, I can't see where the problem would lie (see NOTES.md). However,
+    # if there's an off-by-one error in output size, then it's probable that
+    # this code (and possibly my analysis) is incorrect.
+
+    deconv = Conv2DTranspose(
+        nb_filter,
+        kernel_size=(nb_col, nb_row),
+        strides=(stride_h, stride_w),
+        use_bias=has_bias,
+        name=spec.name,
+        dilation_rate=dilation,
+        data_format='channels_first')(bottom)
+
+    crop = Cropping2D(cropping=((pad_h, pad_h), (pad_w, pad_w)),
+                            name=spec.name + '_cropping',
+                            data_format='channels_first')(deconv)
+    return crop
 
 
 @construct('dropout')
@@ -156,6 +222,7 @@ def handle_dense(spec, bottom):
 
 @construct('pooling')
 def handle_pooling(spec, bottom):
+
     kernel_h = spec.pooling_param.kernel_size or spec.pooling_param.kernel_h
     kernel_w = spec.pooling_param.kernel_size or spec.pooling_param.kernel_w
 
@@ -166,24 +233,6 @@ def handle_pooling(spec, bottom):
     pad_h = spec.pooling_param.pad or spec.pooling_param.pad_h
     pad_w = spec.pooling_param.pad or spec.pooling_param.pad_w
 
-    if debug:
-        print("kernel")
-        print(str(kernel_h) + 'x' + str(kernel_w))
-        print("stride")
-        print(stride_h)
-        print("pad")
-        print(pad_h)
-        print(pad_w)
-
-    # XXX: This sometimes produces outputs which are too small by ~1px. IIRC
-    # Caffe uses a different method to Keras for computing output sizes. I've
-    # been using (fake) padding in my protoxtxts to get around the problem, but
-    # this should be fixed properly at some point.
-    if pad_h + pad_w > 0:
-        bottom = ZeroPadding2D(
-            padding=(pad_h, pad_w),
-            name=spec.name + '_zeropadding',
-            data_format='channels_first')(bottom)
     if spec.pooling_param.pool == 0:  # MAX pooling
         # border_mode = 'same'
         border_mode = 'valid'
@@ -192,16 +241,16 @@ def handle_pooling(spec, bottom):
         return MaxPooling2D(
             padding=border_mode,
             pool_size=(kernel_h, kernel_w),
-            strides=(stride_h, stride_w),
-            name=spec.name,
+            strides=(1, 1),
+            name=spec.name + 'maxpooling',
             data_format='channels_first')(bottom)
     elif (spec.pooling_param.pool == 1):  # AVE pooling
         if debug:
             print("AVE pooling")
         return AveragePooling2D(
             pool_size=(kernel_h, kernel_w),
-            strides=(stride_h, stride_w),
-            name=spec.name,
+            strides=(1, 1),
+            name=spec.name + 'avgpooling',
             data_format='channels_first')(bottom)
 
     # Stochastic pooling still needs to be implemented
@@ -245,6 +294,13 @@ def handle_eltwise(spec, bottoms):
     return Merger(name=spec.name)(bottoms)
 
 
+# @construct('threshold')
+# def handle_threshold(spec, bottom):
+#     threshold = spec.threshold_param.threshold
+#     s = 'lambda x: K.greater(x, {})'.format(threshold)
+#     return LambdaStr(s, name=spec.name)(bottom)
+
+
 def _make_slicer(slices):
     # this function exists because Python makes it hard to construct closures
     # in loops
@@ -257,7 +313,8 @@ def handle_slice(spec, bottom):
     slice_points = sp.slice_point
     assert len(slice_points) + 1 == len(spec.top), \
         "slice points must be one less than top count at %s" % spec.name
-    axis = sp.axis or sp.slice_dim
+    # XXX if slice_dim is set, somehow the axis will still wind up with a 1. Ignore it?
+    axis = sp.slice_dim or sp.axis
 
     if debug:
         print('-- Slice (%s)' % spec.name)
@@ -303,8 +360,7 @@ def handle_batch_norm(spec, bottom):
         epsilon=epsilon,
         momentum=decay,
         axis=axis,
-        name=spec.name,
-        data_format='channels_first')(bottom)
+        name=spec.name)(bottom)
 
 
 @construct('input', num_bottoms=0, num_tops='+')
@@ -317,7 +373,9 @@ def handle_input(spec, bottoms):
     if len(all_shapes) == len(spec.top):
         # 1:1 mapping between shapes and tops
         for shape, top_name in zip(all_shapes, spec.top):
-            new_in = Input(batch_shape=shape.dim, name=top_name)
+            # Keras will auto-configure dim0 as batchsize None. Ignore Caffe
+            # batch size.
+            new_in = Input(shape=shape.dim[1:], name=top_name)
             rv.append(new_in)
     elif len(all_shapes) == 1:
         # copy same input (with same shape) to all tops
@@ -399,11 +457,15 @@ def preprocess_prototxt(prototxt):
             p[i] = '  type: "' + type_ + '"'
         # blobs_lr
         # elif len(l) > 9 and l[:9] == 'blobs_lr:':
-        #     print("The prototxt parameter 'blobs_lr' found in line "+str(i+1)+" is outdated and will be removed. Consider using param { lr_mult: X } instead.")
+        #     print("The prototxt parameter 'blobs_lr' found in line "+str(i+1)+
+        #           " is outdated and will be removed. Consider using param { lr_mult: X } "
+        #           "instead.")
         #    p[i] = ''
         #
         # elif len(l) > 13 and l[:13] == 'weight_decay:':
-        #     print("The prototxt parameter 'weight_decay' found in line "+str(i+1)+" is outdated and will be removed. Consider using param { decay_mult: X } instead.")
+        #     print("The prototxt parameter 'weight_decay' found in line "+str(i+1)+
+        #           " is outdated and will be removed. Consider using param { decay_mult: X } "
+        #           "instead.")
         #     p[i] = ''
 
     p = '\n'.join(p)
@@ -490,13 +552,6 @@ def create_model(config, phase, input_dim):
     return model
 
 
-def rot90(W):
-    for i in range(W.shape[0]):
-        for j in range(W.shape[1]):
-            W[i, j] = np.rot90(W[i, j], 2)
-    return W
-
-
 def convert_weights(param_layers, v='V1'):
     weights = {}
 
@@ -572,7 +627,7 @@ def convert_weights(param_layers, v='V1'):
                 weights_beta.astype(dtype=np.float32)
             ]
 
-        elif typ == 'convolution':
+        elif typ == 'convolution' or typ == 'deconvolution':
             blobs = layer.blobs
 
             if (v == 'V1'):
@@ -615,28 +670,28 @@ def convert_weights(param_layers, v='V1'):
                 print("nb_filter")
                 print(nb_filter)
                 print("(channels x height x width)")
-                print("(" + str(temp_stack_size) + " x " + str(nb_col) + " x "
-                      + str(nb_row) + ")")
+                print("(" + str(temp_stack_size) + " x " + str(nb_col) + " x " +
+                      str(nb_row) + ")")
                 print("groups")
                 print(group)
 
             for i in range(group):
                 group_weights = weights_p[
-                    i*nb_filter_per_group:(i+1)*nb_filter_per_group,
-                    i*stacks_size_per_group:(i+1)*stacks_size_per_group,
+                    i * nb_filter_per_group:(i + 1) * nb_filter_per_group,
+                    i * stacks_size_per_group:(i + 1) * stacks_size_per_group,
                     :, :]
                 blob_d = blobs[0].data
-                blob_gw = blob_d[i*group_data_size:(i+1)*group_data_size]
+                blob_gw = blob_d[i * group_data_size:(i + 1) * group_data_size]
                 group_weights[:] \
                     = np.array(blob_gw).reshape(group_weights.shape)
 
             # caffe, unlike theano, does correlation not convolution. We need
             # to flip the weights 180 deg
-            weights_p = rot90(weights_p)
+            # weights_p = rot90(weights_p)
 
             # Keras needs h*w*i*o filters (where d is input, o is output), so
             # we transpose
-            weights_p = weights_p.transpose((3, 2, 1, 0))
+            weights_p = weights_p.transpose((2, 3, 1, 0))
 
             if weights_b is not None:
                 layer_weights = [
@@ -655,6 +710,11 @@ def load_weights(model, weights):
     for layer in model.layers:
         # TODO: add a check to make sure we're not jumping over any layers with
         # trainable weights
+        if 'scale_' in layer.name:
+            print("*"*64)
+            print("*" * 64)
+            print(layer.name)
+            print(layer)
         if layer.name in weights:
             print('Copying weights for %s' % layer.name)
             model.get_layer(layer.name).set_weights(weights[layer.name])
