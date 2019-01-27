@@ -1,3 +1,41 @@
+# I don't use Caffe or Keras any longer and am not planning to update this code. @ysh329 has compiled a [fantastic list of alternative software that you can use instead](https://github.com/ysh329/deep-learning-model-convertor). Happy converting! :smile:
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
 ## Caffe to Keras converter
 
 **Note:** This converter has been adapted from code in [Marc Bolaños fork of
